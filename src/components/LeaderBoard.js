@@ -1,6 +1,4 @@
 import React from "react";
-import { VscChromeMinimize, VscChromeMaximize } from "react-icons/vsc";
-import { Paper } from "@material-ui/core";
 
 function LeaderBoard({ ranking }) {
   const sortedRanking = ranking

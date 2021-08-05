@@ -1,5 +1,4 @@
 import React from "react";
-import { FaBomb } from "react-icons/fa";
 
 export default function Node({
   row,
