@@ -2,13 +2,10 @@ import React, { useState, useEffect } from "react";
 import Node from "./Node";
 import InfoPanel from "./InfoPanel";
 import EndModal from "./EndModal";
-import Diffculities from "./Diffculities";
 import OptionPanel from "./OptionPanel";
-import LeaderBoard from "./LeaderBoard";
 import RankingModal from "./RankingModal";
-import { useStyle } from "./styles";
-import { Modal } from "@material-ui/core";
 import axios from "axios";
+import NameModal from "./NameModal";
 
 export default function ContentPanel() {
   const [grid, setGrid] = useState(sampleGrid);
@@ -17,7 +14,6 @@ export default function ContentPanel() {
   const [win, setWin] = useState(false);
   const [numBomb, setNumBomb] = useState(10);
   const [ratio, setRatio] = useState(100);
-  const [difficultyShow, setDifficultyShow] = useState(true);
   const [row, setRow] = useState(10);
   const [col, setCol] = useState(10);
   const [time, setTime] = useState(0);
@@ -44,7 +40,6 @@ export default function ContentPanel() {
     axios
       .get("https://ranking-django-api.herokuapp.com/records/")
       .then((resp) => {
-        console.log(resp.data);
         setRanks(resp.data);
       });
   };
@@ -53,27 +48,26 @@ export default function ContentPanel() {
     if (end) {
       return;
     }
-
     setIsActive(true);
     const newGrid = grid.slice();
     newGrid[curRow][curCol].isClose = false;
     if (!grid[curRow][curCol].isBomb) {
+      if (grid[curRow][curCol].isFlag) {
+        grid[curRow][curCol].isFlag = false;
+      }
       findAllNeighboorEmptyNode(newGrid, curRow, curCol, row, col);
     } else {
       setGrid(newGrid);
       setLose(true);
       setEnd(true);
-      resetTimer();
+      setIsActive(false);
     }
     setGrid(newGrid);
     if (checkVictory(newGrid)) {
-      setRanks([...ranks, { name: "Gd", time: time.toFixed(2) }]);
       setWin(true);
       setEnd(true);
-      resetTimer();
+      setIsActive(false);
     }
-
-    console.log(grid);
   };
 
   const putFlag = (row, col, e) => {
@@ -88,17 +82,10 @@ export default function ContentPanel() {
     newGrid[row][col].isFlag = !newGrid[row][col].isFlag;
     setGrid(newGrid);
     if (checkVictory(newGrid)) {
-      setRanks([...ranks, { name: "Gd", time: time.toFixed(2) }]);
-      console.log(ranks);
       setWin(true);
       setEnd(true);
-      resetTimer();
+      setIsActive(false);
     }
-  };
-
-  const resetTimer = () => {
-    setIsActive(false);
-    setTime(0);
   };
 
   const tryAgain = () => {
@@ -119,7 +106,6 @@ export default function ContentPanel() {
     setCol(col);
     setRatio(row * col);
     setNumBomb(numBombs);
-    setDifficultyShow(false);
     setSize(size);
     setGrid(
       initializeGrid(initializeBomb(numBombs, row * col), row, col, size)
@@ -134,15 +120,14 @@ export default function ContentPanel() {
   };
 
   const medium = () => {
-    initializeGame(15, 15, 40, "medium");
+    initializeGame(15, 15, 35, "medium");
   };
 
   const hard = () => {
-    initializeGame(20, 20, 100, "large");
+    initializeGame(20, 20, 80, "large");
   };
 
   const newGame = () => {
-    console.log(numBomb, ratio, row, col, size);
     setGrid(initializeGrid(initializeBomb(numBomb, ratio), row, col, size));
     setEnd(false);
     setTime(0);
@@ -156,26 +141,47 @@ export default function ContentPanel() {
 
   const rankHandleClose = () => {
     setIsShowLB(!isShowLB);
-    setIsActive(true);
+    if (time !== 0 && !end) setIsActive(true);
   };
 
-  const classes = useStyle();
+  const postToRank = (name) => {
+    if (name === "") {
+      alert("Name can't be empty");
+    } else {
+      setIsActive(false);
+      const dataTime = time.toFixed(2);
+      const data = {
+        name,
+        time: dataTime,
+        difficulty: size,
+      };
+      axios
+        .post("https://ranking-django-api.herokuapp.com/records/", data)
+        .then((res) => {
+          setRanks([...ranks, data]);
+          setIsShowLB(true);
+          setWin(false);
+        });
+    }
+  };
 
   return (
     <div className="content-panel">
-      {difficultyShow && false && (
-        <Diffculities easy={easy} medium={medium} hard={hard} />
-      )}
-      {(lose || win) && (
-        <EndModal lose={lose} tryAgain={tryAgain} cancel={cancel} />
-      )}
-      <Modal
-        className={classes.modal}
+      <NameModal
+        open={win}
+        onClose={() => setWin(false)}
+        handleSubmit={(name) => postToRank(name)}
+        handleClose={() => setWin(false)}
+      />
+
+      <EndModal lose={lose} tryAgain={tryAgain} cancel={cancel} />
+
+      <RankingModal
         open={isShowLB}
         onClose={rankHandleClose}
-      >
-        <RankingModal ranking={ranks} />
-      </Modal>
+        ranking={ranks}
+        difficulty={size}
+      />
       <OptionPanel
         easy={easy}
         medium={medium}
@@ -186,10 +192,11 @@ export default function ContentPanel() {
       <InfoPanel grid={grid} time={time} />
       {grid.map((row, rowIdx) => {
         return (
-          <div className="node-container">
+          <div key={"d" + rowIdx} className="node-container">
             {row.map((col, colIdx) => {
               return (
                 <Node
+                  key={rowIdx + " " + colIdx}
                   openNode={(row, col) => openNode(row, col)}
                   putFlag={(row, col, e) => putFlag(row, col, e)}
                   {...col}
@@ -303,10 +310,10 @@ const findAllNeighboorEmptyNode = (
       break;
     }
     const node = stack.pop();
+    node.isFlag = false;
     if (node.indicator !== 0) {
       continue;
     }
-    node.isFlag = false;
     const row = node.row;
     const col = node.col;
     if (row > 0) {
@@ -404,25 +411,5 @@ const checkOpenNodes = (grid) => {
   });
   return result;
 };
-
-const getRandomInt = () => {
-  return (Math.random() * 100).toFixed(2);
-};
-
-const ranking = [
-  { name: "John", time: getRandomInt() },
-  { name: "ish", time: getRandomInt() },
-  { name: "Dave", time: getRandomInt() },
-  { name: "Seth", time: getRandomInt() },
-  { name: "Ivan", time: getRandomInt() },
-  { name: "Riley", time: getRandomInt() },
-  { name: "Gilbert", time: getRandomInt() },
-  { name: "Jorge", time: getRandomInt() },
-  { name: "Dan", time: getRandomInt() },
-  { name: "Brian", time: getRandomInt() },
-  { name: "Roberto", time: getRandomInt() },
-  { name: "Ramon", time: getRandomInt() },
-  { name: "Miles", time: getRandomInt() },
-];
 
 const sampleGrid = initializeGrid(initializeBomb(10, 100), 10, 10, "small");
